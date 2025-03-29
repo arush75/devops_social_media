@@ -1,34 +1,21 @@
 ---
-- name: Launch Docker Container
+- name: Launch Docker Container on Remote VM
   hosts: prod
   vars:
-    docker_image: "jacksneel/django"
-    docker_tag: "latest"
+    docker_image: "{{ lookup('env', 'JOB_NAME') }}"
+    docker_tag: "{{ lookup('env', 'BUILD_ID') }}"
     container_name: "con1"
     host_port: "8000"
     container_port: "8000"
   tasks:
-    - name: Check if the container is already running
+    - name: Load Docker image from tarball
+      shell: docker load -i /root/{{ docker_image }}-{{ docker_tag }}.tar.gz
+
+    - name: Stop and remove old container (if exists)
       docker_container:
         name: "{{ container_name }}"
         state: absent
-      register: container_stats
       ignore_errors: yes
-
-    - name: Remove old container if it exists
-      docker_container:
-        name: "{{ container_name }}"
-        state: absent
-
-    - name: Remove all Docker images
-      shell: docker rmi -f $(docker images -qa)
-      ignore_errors: yes
-
-    - name: Pull the Docker image
-      docker_image:
-        name: "{{ docker_image }}"
-        tag: "{{ docker_tag }}"
-        source: pull
 
     - name: Run the new Docker Container
       docker_container:
