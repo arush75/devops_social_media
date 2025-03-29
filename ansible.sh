@@ -1,5 +1,4 @@
 #!/bin/bash
-cd /root/ansible
 
-# Run the Ansible playbook to load and start the Docker container on Docker VM
-ansible-playbook docker.yaml
+# Run the Ansible playbook with the inventory file
+ansible-playbook -i /root/ansible/inv docker.yaml
