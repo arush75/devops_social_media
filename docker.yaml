@@ -1,25 +1,58 @@
 ---
-- name: Launch Docker Container on Remote VM
-  hosts: prod
+- hosts: prod
+  become: true
   vars:
-    docker_image: "{{ lookup('env', 'JOB_NAME') }}"
-    docker_tag: "{{ lookup('env', 'BUILD_ID') }}"
+    docker_image: "djangoproj:1"  # Corrected image name
     container_name: "con1"
-    host_port: "8000"
+    host_port: "80"
     container_port: "8000"
-  tasks:
-    - name: Load Docker image from tarball
-      shell: docker load -i /root/{{ docker_image }}-{{ docker_tag }}.tar.gz
+    tar_path: "/root/djangoproj-1.tar.gz"  # Corrected tarball name
 
-    - name: Stop and remove old container (if exists)
+  tasks:
+    - name: Clean up Docker system (remove unused containers, images, volumes, networks)
+      shell: |
+        docker system prune -af
+        docker volume prune -f
+        docker network prune -f
+      ignore_errors: yes
+
+    - name: Stop and remove old container if it exists
       docker_container:
         name: "{{ container_name }}"
         state: absent
-      ignore_errors: yes
+      ignore_errors: yes  # Ignore errors in case the container doesn't exist
+
+    - name: Remove the old Docker image if it exists
+      shell: |
+        docker rmi -f "{{ docker_image }}"
+      ignore_errors: yes  # Ignore errors in case the image doesn't exist
+
+    - name: Check if Docker image tarball exists
+      stat:
+        path: "{{ tar_path }}"
+      register: tarball_stat
+
+    - name: Load Docker image from tarball
+      shell: |
+        if [ -f "{{ tar_path }}" ]; then
+          docker load -i "{{ tar_path }}"
+        else
+          echo "Docker tarball not found!"
+          exit 1
+        fi
+      when: tarball_stat.stat.exists
+
+    - name: Verify if the Docker image is loaded
+      command: "docker images {{ docker_image }}"
+      register: image_check
+      failed_when: image_check.rc != 0
+      changed_when: false
 
     - name: Run the new Docker Container
       docker_container:
         name: "{{ container_name }}"
-        image: "{{ docker_image }}:{{ docker_tag }}"
+        image: "{{ docker_image }}"  # Use the image that was loaded from the tarball
         state: started
-        published_ports: "{{ host_port }}:{{ container_port }}"
+        published_ports:
+          - "{{ host_port }}:{{ container_port }}"
+        restart_policy: always
